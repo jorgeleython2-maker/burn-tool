@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quemador Solana - FUNCIONA 100% NOV 2025</title>
-    <!-- Versiones que SÍ funcionan en el navegador -->
     <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
     <style>
         body {font-family: Arial; max-width: 600px; margin: 40px auto; padding: 20px; background:#000; color:#0f9; text-align:center;}
         input, button {margin:15px 0; padding:16px; width:100%; border-radius:12px; border:none; font-size:18px;}
@@ -17,77 +15,85 @@
     </style>
 </head>
 <body>
-    <h1>QUEMADOR SOLANA 2025</h1>
-    <button id="connectWallet">CONECTAR WALLET (Phantom / Backpack)</button>
+    <h1>🔥 QUEMADOR SOLANA 2025 🔥</h1>
+    <button id="connectWallet">🦊 CONECTAR WALLET</button>
     <p id="walletAddress"></p>
 
-    <input type="text" id="mintId" placeholder="Mint del token (ej: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1" required>
-    <input type="number" id="amount" placeholder="Cantidad a quemar (ej: 10.5)" step="any" required>
-    <button id="burnButton" disabled>QUEMAR TOKENS</button>
+    <input type="text" id="mintId" placeholder="Mint del token (ej: DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263)">
+    <input type="number" id="amount" placeholder="Cantidad a quemar (ej: 1000.5)" step="any">
+    <button id="burnButton" disabled>🔥 QUEMAR TOKENS</button>
 
     <p id="status"></p>
     <p id="error"></p>
 
-    <script>
-        // RPC rápido y sin rate-limit (Helius gratis)
+    <!-- Aquí está la clave: type="module" + versión moderna -->
+    <script type="module">
+        import {
+            getAssociatedTokenAddress,
+            createAssociatedTokenAccountInstruction,
+            createBurnInstruction,
+            getMint
+        } from "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.4.8/+esm";
+
         const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=0f33e8c8-5494-4073-b27e-0e21e0545a71');
 
         let provider = null;
         let wallet = null;
 
-        // CONECTAR WALLET
         document.getElementById('connectWallet').onclick = async () => {
-            if (!window.solana) {
-                alert('Instala Phantom o Backpack');
-                return;
-            }
+            if (!window.solana) return alert('Instala Phantom o Backpack');
             try {
                 provider = window.solana;
                 await provider.connect();
                 wallet = provider.publicKey;
-                document.getElementById('walletAddress').textContent = 'Conectado: ' + wallet.toBase58().slice(0,10) + '...';
+                document.getElementById('walletAddress').textContent = '✅ Conectado: ' + wallet.toBase58().slice(0,10) + '...';
                 document.getElementById('connectWallet').disabled = true;
                 document.getElementById('burnButton').disabled = false;
-                document.getElementById('error').textContent = '';
             } catch (e) {
-                document.getElementById('error').textContent = 'Conexión cancelada';
+                document.getElementById('error').textContent = 'Cancelado o error de wallet';
             }
         };
 
-        // QUEMAR TOKENS (100% funcional)
         document.getElementById('burnButton').onclick = async () => {
             const mintStr = document.getElementById('mintId').value.trim();
-            const amount = parseFloat(document.getElementById('amount').value);
+            const amountInput = parseFloat(document.getElementById('amount').value);
 
-            if (!mintStr || !amount || amount <= 0) {
-                document.getElementById('error').textContent = 'Rellena mint y cantidad';
+            if (!mintStr || !amountInput || !wallet) {
+                document.getElementById('error').textContent = 'Rellena todo';
                 return;
             }
 
-            document.getElementById('status').textContent = 'Quemando...';
+            document.getElementById('status').textContent = '⏳ Quemando...';
             document.getElementById('error').textContent = '';
 
             try {
                 const mint = new solanaWeb3.PublicKey(mintStr);
 
-                // Aquí está la magia: splToken viene del script 0.3.8 iife
-                const mintInfo = await splToken.getMint(connection, mint);
-                const burnAmount = BigInt(Math.round(amount * 10 ** mintInfo.decimals));
+                // Obtener decimales
+                const mintInfo = await getMint(connection, mint);
+                const burnAmount = BigInt(Math.round(amountInput * 10 ** mintInfo.decimals));
 
-                const ata = await splToken.getAssociatedTokenAddress(mint, wallet);
+                // ATA
+                const ata = await getAssociatedTokenAddress(mint, wallet);
 
                 const tx = new solanaWeb3.Transaction();
 
                 // Crear ATA si no existe
                 if (!await connection.getAccountInfo(ata)) {
-                    tx.add(splToken.createAssociatedTokenAccountInstruction(
-                        wallet, ata, wallet, mint
+                    tx.add(createAssociatedTokenAccountInstruction(
+                        wallet, // payer
+                        ata,
+                        wallet, // owner
+                        mint
                     ));
                 }
 
                 // Quemar
-                tx.add(splToken.createBurnInstruction(
-                    ata, mint, wallet, burnAmount
+                tx.add(createBurnInstruction(
+                    ata,      // source
+                    mint,     // mint
+                    wallet,   // owner
+                    burnAmount
                 ));
 
                 const { blockhash } = await connection.getLatestBlockhash();
