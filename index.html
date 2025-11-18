@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quemador de Tokens - Solana Directo</title>
+    <title>Quemador de Tokens - Solana Directo (Mainnet)</title>
     <script src="https://unpkg.com/@solana/web3.js@latest"></script>
     <script src="https://unpkg.com/@solana/spl-token@latest"></script>
     <style>
@@ -16,8 +16,8 @@
     </style>
 </head>
 <body>
-    <h1>Quemador de Tokens con Solana APIs</h1>
-    <p>Conecta tu wallet, ingresa la mint del token y la cantidad a quemar (en tokens completos, ej. 1 para 1 token). Esto es destructivo: ¡los tokens se perderán para siempre!</p>
+    <h1>Quemador de Tokens con Solana APIs (Mainnet)</h1>
+    <p>Conecta tu wallet, ingresa la mint del token y la cantidad a quemar (en tokens completos, ej. 1 para 1 token). Esto es destructivo: ¡los tokens se perderán para siempre! Asegúrate de tener SOL para fees.</p>
     
     <button id="connectWallet">Conectar Wallet (Phantom)</button>
     <p id="walletAddress"></p>
@@ -34,7 +34,7 @@
     <p id="error"></p>
 
     <script>
-        const CLUSTER_URL = 'https://api.mainnet-beta.solana.com'; // Cambia a 'https://api.devnet.solana.com' para pruebas
+        const CLUSTER_URL = 'https://api.mainnet-beta.solana.com'; // Configurado para Mainnet (usa un RPC premium si hay rate limits)
         const connectWalletBtn = document.getElementById('connectWallet');
         const burnButton = document.getElementById('burnButton');
         const walletAddress = document.getElementById('walletAddress');
