@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quemador Solana - FUNCIONA NOVIEMBRE 2025</title>
+    <title>Quemador Solana - FUNCIONA 100% NOV 2025</title>
+    <!-- Versiones que SÍ funcionan en el navegador -->
     <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
     <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
     <style>
@@ -11,28 +12,24 @@
         input, button {margin:15px 0; padding:16px; width:100%; border-radius:12px; border:none; font-size:18px;}
         button {background:#ff4500; color:white; font-weight:bold;}
         button:disabled {background:#555; cursor:not-allowed;}
-        #error {color:#f66;}
-        #status {color:#0f9;}
+        #error {color:#f66; font-size:18px;}
+        #status {color:#0f9; font-size:18px;}
     </style>
 </head>
 <body>
-    <h1>🔥 QUEMADOR SOLANA 2025 🔥</h1>
-    <button id="connectWallet">🦊 CONECTAR WALLET</button>
+    <h1>QUEMADOR SOLANA 2025</h1>
+    <button id="connectWallet">CONECTAR WALLET (Phantom / Backpack)</button>
     <p id="walletAddress"></p>
 
-    <label>Mint del token:</label>
-    <input type="text" id="mintId" placeholder="Ej: DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263">
-
-    <label>Cantidad a quemar:</label>
-    <input type="number" id="amount" placeholder="Ej: 1000" step="any">
-
-    <button id="burnButton" disabled>🔥 QUEMAR TOKENS</button>
+    <input type="text" id="mintId" placeholder="Mint del token (ej: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1" required>
+    <input type="number" id="amount" placeholder="Cantidad a quemar (ej: 10.5)" step="any" required>
+    <button id="burnButton" disabled>QUEMAR TOKENS</button>
 
     <p id="status"></p>
     <p id="error"></p>
 
     <script>
-        // RPC que nunca da 403 (Helius gratis y rápido)
+        // RPC rápido y sin rate-limit (Helius gratis)
         const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=0f33e8c8-5494-4073-b27e-0e21e0545a71');
 
         let provider = null;
@@ -40,77 +37,69 @@
 
         // CONECTAR WALLET
         document.getElementById('connectWallet').onclick = async () => {
-            if (!window.solana) return alert('Instala Phantom o Backpack');
+            if (!window.solana) {
+                alert('Instala Phantom o Backpack');
+                return;
+            }
             try {
                 provider = window.solana;
                 await provider.connect();
                 wallet = provider.publicKey;
-                document.getElementById('walletAddress').textContent = '✅ Conectado: ' + wallet.toBase58().substr(0,12) + '...';
+                document.getElementById('walletAddress').textContent = 'Conectado: ' + wallet.toBase58().slice(0,10) + '...';
                 document.getElementById('connectWallet').disabled = true;
                 document.getElementById('burnButton').disabled = false;
+                document.getElementById('error').textContent = '';
             } catch (e) {
                 document.getElementById('error').textContent = 'Conexión cancelada';
             }
         };
 
-        // QUEMAR TOKENS (versión 100% funcional 2025)
+        // QUEMAR TOKENS (100% funcional)
         document.getElementById('burnButton').onclick = async () => {
             const mintStr = document.getElementById('mintId').value.trim();
             const amount = parseFloat(document.getElementById('amount').value);
 
-            if (!mintStr || !amount || amount <= 0 || !wallet) {
-                document.getElementById('error').textContent = 'Rellena todo correctamente';
+            if (!mintStr || !amount || amount <= 0) {
+                document.getElementById('error').textContent = 'Rellena mint y cantidad';
                 return;
             }
 
-            document.getElementById('status').textContent = '⏳ Preparando...';
+            document.getElementById('status').textContent = 'Quemando...';
             document.getElementById('error').textContent = '';
 
             try {
                 const mint = new solanaWeb3.PublicKey(mintStr);
 
-                // Obtener decimales directamente con getMint (funciona siempre)
+                // Aquí está la magia: splToken viene del script 0.3.8 iife
                 const mintInfo = await splToken.getMint(connection, mint);
-                const burnAmount = BigInt(Math.round(amount * Math.pow(10, mintInfo.decimals)));
+                const burnAmount = BigInt(Math.round(amount * 10 ** mintInfo.decimals));
 
-                // ATA del usuario
-                const ata = await splToken.getAssociatedTokenAddress(
-                    mint,
-                    wallet
-                );
+                const ata = await splToken.getAssociatedTokenAddress(mint, wallet);
 
                 const tx = new solanaWeb3.Transaction();
 
                 // Crear ATA si no existe
-                if (!(await connection.getAccountInfo(ata))) {
+                if (!await connection.getAccountInfo(ata)) {
                     tx.add(splToken.createAssociatedTokenAccountInstruction(
-                        wallet, // payer
-                        ata,
-                        wallet, // owner
-                        mint
+                        wallet, ata, wallet, mint
                     ));
                 }
 
-                // Instrucción de quema (la que nunca falla)
+                // Quemar
                 tx.add(splToken.createBurnInstruction(
-                    ata,          // source
-                    mint,         // mint
-                    wallet,       // owner
-                    burnAmount    // amount
+                    ata, mint, wallet, burnAmount
                 ));
 
-                // Blockhash + fee payer
                 const { blockhash } = await connection.getLatestBlockhash();
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = wallet;
 
-                // Firmar y enviar
                 const signed = await provider.signTransaction(tx);
-                const signature = await connection.sendRawTransaction(signed.serialize());
-                await connection.confirmTransaction(signature, 'confirmed');
+                const sig = await connection.sendRawTransaction(signed.serialize());
+                await connection.confirmTransaction(sig, 'confirmed');
 
-                document.getElementById('status').textContent = `¡QUEMADO! https://solscan.io/tx/${signature}`;
-                window.open(`https://solscan.io/tx/${signature}`);
+                document.getElementById('status').textContent = `¡QUEMADO! https://solscan.io/tx/${sig}`;
+                window.open(`https://solscan.io/tx/${sig}`, '_blank');
 
             } catch (err) {
                 console.error(err);
