@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quemador de Tokens - Sol Incinerator</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest"></script>
+    <script src="https://unpkg.com/bs58@latest"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        input, button { margin: 10px 0; padding: 8px; width: 100%; }
+        #status { color: green; }
+        #error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Quemador de Tokens con Sol Incinerator</h1>
+    <p>Conecta tu wallet, ingresa el ID del asset (mint o cuenta de token) y quema el token. Esto es destructivo: ¡el asset se perderá para siempre!</p>
+    
+    <button id="connectWallet">Conectar Wallet (Phantom)</button>
+    <p id="walletAddress"></p>
+    
+    <label for="assetId">ID del Asset (mint o cuenta de token):</label>
+    <input type="text" id="assetId" placeholder="Ej: 7tPfzEm87ao3UCK54w1K73CkTz1WmvXWLXeijzDCrn2C">
+    
+    <button id="burnButton" disabled>Quemar Token</button>
+    
+    <p id="status"></p>
+    <p id="error"></p>
+
+    <script>
+        const API_BASE_URL = 'https://v1.api.sol-incinerator.com';
+        const API_KEY = 'your-api-key-here'; // ¡Reemplaza con tu clave API real!
+        const CLUSTER_URL = 'https://api.mainnet-beta.solana.com'; // Usa 'https://api.devnet.solana.com' para pruebas
+        
+        const connectWalletBtn = document.getElementById('connectWallet');
+        const burnButton = document.getElementById('burnButton');
+        const walletAddress = document.getElementById('walletAddress');
+        const assetIdInput = document.getElementById('assetId');
+        const status = document.getElementById('status');
+        const error = document.getElementById('error');
+        
+        let walletPublicKey = null;
+        const connection = new solanaWeb3.Connection(CLUSTER_URL);
+
+        // Conectar wallet
+        connectWalletBtn.onclick = async () => {
+            if (!window.solana) {
+                error.textContent = 'Instala Phantom u otra wallet compatible.';
+                return;
+            }
+            try {
+                const response = await window.solana.connect();
+                walletPublicKey = response.publicKey.toString();
+                walletAddress.textContent = `Wallet conectada: ${walletPublicKey}`;
+                burnButton.disabled = false;
+                connectWalletBtn.disabled = true;
+            } catch (err) {
+                error.textContent = 'Error al conectar wallet: ' + err.message;
+            }
+        };
+
+        // Quemar token
+        burnButton.onclick = async () => {
+            const assetId = assetIdInput.value.trim();
+            if (!assetId) {
+                error.textContent = 'Ingresa un ID de asset válido.';
+                return;
+            }
+            status.textContent = 'Procesando...';
+            error.textContent = '';
+
+            try {
+                // Llamar a la API /burn
+                const apiResponse = await fetch(`${API_BASE_URL}/burn`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        userPublicKey: walletPublicKey,
+                        assetId: assetId,
+                        autoCloseTokenAccounts: true // Opcional: cierra la cuenta automáticamente
+                        // Agrega otros params si necesitas, como priorityFeeMicroLamports
+                    })
+                });
+
+                if (!apiResponse.ok) {
+                    throw new Error(`Error API: ${apiResponse.statusText}`);
+                }
+
+                const data = await apiResponse.json();
+                console.log('Respuesta API:', data); // Para depuración
+
+                // Deserializar transacción
+                const transaction = solanaWeb3.VersionedTransaction.deserialize(bs58.decode(data.serializedTransaction));
+
+                // Firmar con wallet
+                const signedTransaction = await window.solana.signTransaction(transaction);
+
+                // Enviar transacción
+                const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                await connection.confirmTransaction(signature);
+
+                status.textContent = `¡Token quemado! Firma: ${signature}. SOL reclamado: ${data.solanaReclaimed}`;
+            } catch (err) {
+                error.textContent = 'Error: ' + err.message;
+            }
+        };
+    </script>
+</body>
+</html>
