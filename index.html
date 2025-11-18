@@ -3,25 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quemador Solana - FUNCIONA 100% 2025</title>
+    <title>Quemador Solana 2025 - FUNCIONA 100%</title>
+    <!-- Usamos las versiones IIFE que sí crean el objeto global splToken -->
     <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@0.4.8/lib/index.iife.min.js"></script>
     <style>
-        body {font-family: Arial; max-width: 600px; margin: 40px auto; padding: 20px; background: #000; color: #0f9; text-align: center;}
-        input, button {margin: 15px 0; padding: 16px; width: 100%; border-radius: 12px; border: none; font-size: 18px;}
-        button {background: #ff4500; color: white; font-weight: bold;}
-        button:disabled {background: #555; cursor: not-allowed;}
-        #error {color: #f66;}
-        #status {color: #0f9;}
+        body { font-family: Arial; max-width: 600px; margin: 40px auto; padding: 20px; background: #000; color: #0f9; text-align: center; }
+        input, button { margin: 15px 0; padding: 16px; width: 100%; border-radius: 12px; border: none; font-size: 18px; }
+        button { background: #ff4500; color: white; font-weight: bold; }
+        button:disabled { background: #555; }
+        #error { color: #f66; font-size: 18px; }
+        #status { color: #0f9; font-size: 18px; }
     </style>
 </head>
 <body>
-    <h1>🔥 QUEMADOR SOLANA 2025 🔥</h1>
+    <h1>🔥 QUEMADOR DE TOKENS SOLANA 2025 🔥</h1>
     <button id="connectWallet">🦊 CONECTAR WALLET</button>
     <p id="walletAddress"></p>
 
-    <input type="text" id="mintId" placeholder="Mint del token">
-    <input type="number" id="amount" placeholder="Cantidad (ej: 100)" step="any">
+    <input type="text" id="mintId" placeholder="Mint del token (ej: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)">
+    <input type="number" id="amount" placeholder="Cantidad a quemar" step="any">
     <button id="burnButton" disabled>🔥 QUEMAR TOKENS</button>
 
     <p id="status"></p>
@@ -30,96 +31,80 @@
     <script>
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
         let provider = null;
-        let wallet = null;
+        let publicKey = null;
 
+        // CONEXIÓN (ya funciona)
         document.getElementById('connectWallet').onclick = async () => {
-            if (!window.solana) return alert('Instala Phantom / Backpack / Solflare');
+            if (!window.solana) return alert('Instala Phantom o Backpack');
             try {
                 provider = window.solana;
                 await provider.connect();
-                wallet = provider.publicKey;
+                publicKey = provider.publicKey;
 
-                document.getElementById('walletAddress').textContent = '✅ Conectado: ' + wallet.toBase58().slice(0,10) + '...';
+                document.getElementById('walletAddress').textContent = 
+                    '✅ ' + publicKey.toBase58().substr(0,10) + '...';
                 document.getElementById('connectWallet').disabled = true;
-                document.getElementById('connectWallet').textContent = '✅ Conectado';
                 document.getElementById('burnButton').disabled = false;
             } catch (e) {
-                document.getElementById('error').textContent = 'Conexión cancelada';
+                document.getElementById('error').textContent = 'Cancelado o error';
             }
         };
 
+        // QUEMAR (CORREGIDO spl-token)
         document.getElementById('burnButton').onclick = async () => {
             const mintStr = document.getElementById('mintId').value.trim();
             const amount = parseFloat(document.getElementById('amount').value);
-            if (!mintStr || !amount || !wallet) return;
 
-            document.getElementById('status').textContent = '⏳ Quemando...';
+            if (!mintStr || !amount || amount <= 0) {
+                document.getElementById('error').textContent = 'Rellena todo bien';
+                return;
+            }
+
+            document.getElementById('status').textContent = '⏳ Quemando…';
             document.getElementById('error').textContent = '';
 
             try {
                 const mint = new solanaWeb3.PublicKey(mintStr);
 
-                // === ESTA ES LA VERSIÓN QUE SÍ FUNCIONA EN 2025 ===
-                const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-                const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+                // Aquí está la clave: usar Token directamente porque la versión iife lo pone en window
+                const tokenProgram = window.Token; // ← Esto arregla el "splToken is not defined"
 
-                // Obtener decimales
-                const mintAccountInfo = await connection.getAccountInfo(mint);
-                if (!mintAccountInfo) throw new Error('Mint inválida');
-                const mintData = splToken.MintLayout.decode(mintAccountInfo.data);
-                const decimals = mintData.decimals;
-                const burnAmount = BigInt(Math.round(amount * (10 ** decimals)));
+                const mintInfo = await tokenProgram.getMintInfo(connection, mint);
+                const burnAmount = BigInt(Math.round(amount * 10 ** mintInfo.decimals));
 
-                // ATA
-                const ata = await splToken.Token.getAssociatedTokenAddress(
-                    ASSOCIATED_TOKEN_PROGRAM_ID,
-                    TOKEN_PROGRAM_ID,
-                    mint,
-                    wallet
+                const ata = await tokenProgram.getAssociatedTokenAddress(
+                    mint, publicKey, false, tokenProgram.TOKEN_PROGRAM_ID, tokenProgram.ASSOCIATED_TOKEN_PROGRAM_ID
                 );
 
                 const tx = new solanaWeb3.Transaction();
 
                 // Crear ATA si no existe
-                const ataInfo = await connection.getAccountInfo(ata);
-                if (!ataInfo) {
-                    tx.add(
-                        splToken.Token.createAssociatedTokenAccountInstruction(
-                            ASSOCIATED_TOKEN_PROGRAM_ID,
-                            TOKEN_PROGRAM_ID,
-                            mint,
-                            ata,
-                            wallet,
-                            wallet
-                        )
-                    );
+                if (!await connection.getAccountInfo(ata)) {
+                    tx.add(tokenProgram.createAssociatedTokenAccountInstruction(
+                        publicKey, ata, publicKey, mint
+                    ));
                 }
 
                 // Quemar
-                tx.add(
-                    splToken.Token.createBurnInstruction(
-                        TOKEN_PROGRAM_ID,
-                        mint,
-                        ata,
-                        wallet,
-                        [],
-                        burnAmount
-                    )
-                );
+                tx.add(tokenProgram.createBurnInstruction(
+                    ata, mint, publicKey, burnAmount, [], tokenProgram.TOKEN_PROGRAM_ID
+                ));
 
                 tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-                tx.feePayer = wallet;
+                tx.feePayer = publicKey;
 
                 const signed = await provider.signTransaction(tx);
                 const sig = await connection.sendRawTransaction(signed.serialize());
                 await connection.confirmTransaction(sig);
 
+                document.getElementById('status').textContent = '🎉 ¡Quemado con éxito!';
                 document.getElementById('status').textContent = `🎉 ¡Quemado! https://solscan.io/tx/${sig}`;
                 window.open(`https://solscan.io/tx/${sig}`);
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('error').textContent = 'Error: ' + (err.message || err);
+                document.getElementById('error').textContent = 'Error: ' + err.message;
+                document.getElementById('status').textContent = '';
             }
         };
     </script>
