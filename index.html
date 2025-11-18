@@ -44,7 +44,7 @@
                 wallet = provider.publicKey;
                 document.getElementById('walletAddress').textContent = 'Conectado: ' + wallet.toBase58().slice(0,10) + '...';
                 document.getElementById('connectWallet').disabled = true;
-                document.getElementById('burnButton').disabled = false;
+                document.getElementById('burnButton').disabled = true;
             } catch (e) {
                 document.getElementById('error').textContent = 'Cancelado';
             }
