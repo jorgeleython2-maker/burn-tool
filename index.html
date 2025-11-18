@@ -7,68 +7,78 @@
     <script src="https://unpkg.com/@solana/web3.js@1.95.2"></script>
     <script src="https://unpkg.com/@solana/spl-token@0.4.8"></script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
-        input, button { margin: 10px 0; padding: 12px; width: 100%; border: none; border-radius: 8px; }
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #111; color: #fff; text-align: center; }
+        input, button { margin: 15px 0; padding: 14px; width: 100%; border-radius: 12px; border: none; font-size: 16px; }
         button { background: #ff4500; color: white; font-weight: bold; cursor: pointer; }
-        button:hover { background: #ff5500; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        #status { color: #0f0; font-weight: bold; }
+        button:hover { background: #ff5a1f; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        h1 { color: #ff4500; }
+        #status { color: #0f9; font-weight: bold; }
         #error { color: #f66; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>🔥 Quemador de Tokens Solana (Mainnet)</h1>
-    <p>Conecta Phantom (o cualquier wallet) → pega la mint → quema lo que quieras.<br><strong>¡Irreversible! Los tokens desaparecen para siempre.</strong></p>
-    
-    <button id="connectWallet">🦊 Conectar Wallet (Phantom, Backpack, etc.)</button>
+    <h1>🔥 QUEMADOR DE TOKENS SOLANA 🔥</h1>
+    <p>Conecta tu wallet → pega la mint → quema lo que quieras.<br>¡Irreversible y 100% funcional en 2025!</p>
+
+    <button id="connectWallet">🦊 Conectar Wallet (Phantom / Backpack / etc.)</button>
     <p id="walletAddress"></p>
-    
+
     <label>Mint del token:</label>
     <input type="text" id="mintId" placeholder="Ej: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v">
-    
-    <label>Cantidad a quemar (ej. 69.420):</label>
-    <input type="number" id="amount" placeholder="420" step="any">
-    
-    <button id="burnButton" disabled>🔥 QUEMAR TOKENS 🔥</button>
-    
+
+    <label>Cantidad a quemar (con decimales si tiene):</label>
+    <input type="number" id="amount" placeholder="Ej: 420.69" step="any">
+
+    <button id="burnButton" disabled>🔥 QUEMAR TOKENS AHORA 🔥</button>
+
     <p id="status"></p>
     <p id="error"></p>
 
     <script>
         const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+
         const connectBtn = document.getElementById('connectWallet');
         const burnBtn = document.getElementById('burnButton');
         const walletP = document.getElementById('walletAddress');
         const status = document.getElementById('status');
         const error = document.getElementById('error');
-        let wallet = null;
+
+        let walletPublicKey = null;
 
         // ====== CONEXIÓN ACTUALIZADA 2025 (esto es lo que arregla todo) ======
         connectBtn.onclick = async () => {
             if (!window.solana) {
-                error.textContent = '❌ No tienes wallet instalada. Descarga Phantom: https://phantom.app';
+                error.textContent = '❌ Instala Phantom o una wallet compatible';
                 return;
             }
             try {
-                const resp = await window.solana.connect({ onlyIfTrusted: false });
-                wallet = resp.publicKey;
-                walletP.textContent = `✅ Conectado: ${wallet.toBase58().slice(0,10)}...`;
+                await window.solana.connect({ onlyIfTrusted: false }); // fuerza el popup siempre
+                walletPublicKey = new solanaWeb3.PublicKey(window.solana.publicKey.toBytes());
+                walletP.textContent = `✅ Conectado: ${walletPublicKey.toBase58().slice(0,10)}...`;
                 connectBtn.textContent = '✅ Wallet Conectada';
                 connectBtn.disabled = true;
                 burnBtn.disabled = false;
                 error.textContent = '';
+                status.textContent = '¡Listo para quemar!';
             } catch (err) {
-                error.textContent = err.code === 4001 ? '❌ Conexión cancelada por ti' : 'Error: ' + err.message;
+                error.textContent = err.code === 4001 
+                    ? '❌ Cancelaste la conexión' 
+                    : 'Error: ' + err.message;
             }
         };
 
-        // ====== QUEMAR TOKENS (corregido y robusto) ======
+        // ====== QUEMAR TOKENS (rodea todo lo necesario) ======
         burnBtn.onclick = async () => {
             const mintStr = document.getElementById('mintId').value.trim();
             const amountStr = document.getElementById('amount').value;
-            if (!mintStr || !amountStr || !wallet) return error.textContent = 'Faltan datos';
 
-            status.textContent = '⏳ Procesando...';
+            if (!mintStr || !amountStr) {
+                error.textContent = '❌ Completa mint y cantidad';
+                return;
+            }
+
+            status.textContent = '⏳ Preparando transacción...';
             error.textContent = '';
 
             try {
@@ -76,14 +86,14 @@
                 const amount = parseFloat(amountStr);
                 if (isNaN(amount) || amount <= 0) throw new Error('Cantidad inválida');
 
-                // Info del mint (decimales)
+                // Obtener decimales
                 const mintInfo = await splToken.getMint(connection, mint);
-                const burnAmount = BigInt(Math.round(amount * 10 ** mintInfo.decimals));
+                const burnAmount = BigInt(Math.round(amount * (10 ** mintInfo.decimals)));
 
-                // ATA (crea si no existe)
+                // ATA del usuario
                 const ata = await splToken.getAssociatedTokenAddress(
                     mint,
-                    wallet,
+                    walletPublicKey,
                     false,
                     splToken.TOKEN_PROGRAM_ID,
                     splToken.ASSOCIATED_TOKEN_PROGRAM_ID
@@ -91,12 +101,15 @@
 
                 const tx = new solanaWeb3.Transaction();
 
-                // Si la ATA no existe → créala primero
-                const ataInfo = await connection.getAccountInfo(ata);
-                if (!ataInfo) {
+                // Crear ATA si no existe
+                const accountInfo = await connection.getAccountInfo(ata);
+                if (!accountInfo) {
                     tx.add(
                         splToken.createAssociatedTokenAccountInstruction(
-                            wallet, ata, wallet, mint
+                            walletPublicKey, // payer
+                            ata,             // ata
+                            walletPublicKey, // owner
+                            mint             // mint
                         )
                     );
                 }
@@ -104,28 +117,31 @@
                 // Instrucción de quema
                 tx.add(
                     splToken.createBurnInstruction(
-                        ata,
-                        mint,
-                        wallet,
-                        burnAmount
+                        ata,             // cuenta token
+                        mint,            // mint
+                        walletPublicKey, // owner
+                        burnAmount       // cantidad en unidades mínimas
                     )
                 );
 
                 // Blockhash y fee payer
                 const { blockhash } = await connection.getLatestBlockhash();
                 tx.recentBlockhash = blockhash;
-                tx.feePayer = wallet;
+                tx.feePayer = walletPublicKey;
 
-                // Firma y envío
+                // Firmar y enviar
                 const signed = await window.solana.signTransaction(tx);
-                const sig = await connection.sendRawTransaction(signed.serialize());
-                await connection.confirmTransaction(sig, 'confirmed');
+                const signature = await connection.sendRawTransaction(signed.serialize());
+                await connection.confirmTransaction(signature, 'confirmed');
 
-                status.textContent = `🎉 ¡Quemados! Tx: ${sig}`;
-                window.open(`https://solscan.io/tx/${sig}`, '_blank');
+                status.textContent = `🎉 ¡QUEMADOS CORRECTAMENTE!`;
+                error.textContent = '';
+                window.open(`https://solscan.io/tx/${signature}`, '_blank');
+
             } catch (err) {
                 console.error(err);
                 error.textContent = '❌ Error: ' + (err.message || err);
+                status.textContent = '';
             }
         };
     </script>
