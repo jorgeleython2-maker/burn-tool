@@ -3,45 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quemador de Tokens - Sol Incinerator</title>
+    <title>Quemador de Tokens - Solana Directo</title>
     <script src="https://unpkg.com/@solana/web3.js@latest"></script>
-    <script src="https://unpkg.com/bs58@latest"></script>
+    <script src="https://unpkg.com/@solana/spl-token@latest"></script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-        input, button { margin: 10px 0; padding: 8px; width: 100%; }
-        #status { color: green; }
-        #error { color: red; }
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f0f0f0; color: #333; }
+        input, button { margin: 10px 0; padding: 8px; width: 100%; border: 1px solid #ccc; }
+        button { background: #ff4500; color: white; border: none; cursor: pointer; }
+        button:hover { background: #cc3700; }
+        #status { color: green; font-weight: bold; }
+        #error { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>Quemador de Tokens con Sol Incinerator</h1>
-    <p>Conecta tu wallet, ingresa el ID del asset (mint o cuenta de token) y quema el token. Esto es destructivo: ¡el asset se perderá para siempre!</p>
+    <h1>Quemador de Tokens con Solana APIs</h1>
+    <p>Conecta tu wallet, ingresa la mint del token y la cantidad a quemar (en tokens completos, ej. 1 para 1 token). Esto es destructivo: ¡los tokens se perderán para siempre!</p>
     
     <button id="connectWallet">Conectar Wallet (Phantom)</button>
     <p id="walletAddress"></p>
     
-    <label for="assetId">ID del Asset (mint o cuenta de token):</label>
-    <input type="text" id="assetId" placeholder="Ej: 7tPfzEm87ao3UCK54w1K73CkTz1WmvXWLXeijzDCrn2C">
+    <label for="mintId">Dirección de la Mint (Pubkey):</label>
+    <input type="text" id="mintId" placeholder="Ej: 7tPfzEm87ao3UCK54w1K73CkTz1WmvXWLXeijzDCrn2C">
     
-    <button id="burnButton" disabled>Quemar Token</button>
+    <label for="amount">Cantidad a Quemar (en tokens, ej. 1):</label>
+    <input type="number" id="amount" placeholder="Ej: 1" step="any">
+    
+    <button id="burnButton" disabled>Quemar Tokens</button>
     
     <p id="status"></p>
     <p id="error"></p>
 
     <script>
-        const API_BASE_URL = 'https://v1.api.sol-incinerator.com';
-        const API_KEY = 'your-api-key-here'; // ¡Reemplaza con tu clave API real!
-        const CLUSTER_URL = 'https://api.mainnet-beta.solana.com'; // Usa 'https://api.devnet.solana.com' para pruebas
-        
+        const CLUSTER_URL = 'https://api.mainnet-beta.solana.com'; // Cambia a 'https://api.devnet.solana.com' para pruebas
         const connectWalletBtn = document.getElementById('connectWallet');
         const burnButton = document.getElementById('burnButton');
         const walletAddress = document.getElementById('walletAddress');
-        const assetIdInput = document.getElementById('assetId');
+        const mintIdInput = document.getElementById('mintId');
+        const amountInput = document.getElementById('amount');
         const status = document.getElementById('status');
         const error = document.getElementById('error');
         
         let walletPublicKey = null;
-        const connection = new solanaWeb3.Connection(CLUSTER_URL);
+        const connection = new solanaWeb3.Connection(CLUSTER_URL, 'confirmed');
 
         // Conectar wallet
         connectWalletBtn.onclick = async () => {
@@ -51,7 +54,7 @@
             }
             try {
                 const response = await window.solana.connect();
-                walletPublicKey = response.publicKey.toString();
+                walletPublicKey = new solanaWeb3.PublicKey(response.publicKey.toString());
                 walletAddress.textContent = `Wallet conectada: ${walletPublicKey}`;
                 burnButton.disabled = false;
                 connectWalletBtn.disabled = true;
@@ -60,52 +63,57 @@
             }
         };
 
-        // Quemar token
+        // Quemar tokens
         burnButton.onclick = async () => {
-            const assetId = assetIdInput.value.trim();
-            if (!assetId) {
-                error.textContent = 'Ingresa un ID de asset válido.';
+            const mintStr = mintIdInput.value.trim();
+            const amountStr = amountInput.value.trim();
+            if (!mintStr || !amountStr) {
+                error.textContent = 'Ingresa una mint y cantidad válidas.';
                 return;
             }
             status.textContent = 'Procesando...';
             error.textContent = '';
 
             try {
-                // Llamar a la API /burn
-                const apiResponse = await fetch(`${API_BASE_URL}/burn`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': API_KEY
-                    },
-                    body: JSON.stringify({
-                        userPublicKey: walletPublicKey,
-                        assetId: assetId,
-                        autoCloseTokenAccounts: true // Opcional: cierra la cuenta automáticamente
-                        // Agrega otros params si necesitas, como priorityFeeMicroLamports
-                    })
-                });
+                const mint = new solanaWeb3.PublicKey(mintStr);
+                const amount = parseFloat(amountStr);
 
-                if (!apiResponse.ok) {
-                    throw new Error(`Error API: ${apiResponse.statusText}`);
-                }
+                // Fetch info de mint (decimales)
+                const mintInfo = await splToken.getMint(connection, mint);
+                const decimals = mintInfo.decimals;
+                const burnAmount = BigInt(Math.floor(amount * Math.pow(10, decimals))); // Ajusta a unidades mínimas
 
-                const data = await apiResponse.json();
-                console.log('Respuesta API:', data); // Para depuración
+                // Derivar ATA (cuenta de token asociada)
+                const tokenAccount = await splToken.getAssociatedTokenAddress(mint, walletPublicKey);
 
-                // Deserializar transacción
-                const transaction = solanaWeb3.VersionedTransaction.deserialize(bs58.decode(data.serializedTransaction));
+                // Crear instrucción de quema (BurnChecked para tokens estándar)
+                const burnIx = splToken.createBurnCheckedInstruction(
+                    tokenAccount, // Cuenta de token
+                    mint,         // Mint
+                    walletPublicKey, // Authority (owner)
+                    burnAmount,   // Cantidad
+                    decimals      // Decimales
+                );
+
+                // Crear transacción
+                const transaction = new solanaWeb3.Transaction().add(burnIx);
+
+                // Obtener bloquehash reciente
+                const { blockhash } = await connection.getLatestBlockhash();
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = walletPublicKey;
 
                 // Firmar con wallet
                 const signedTransaction = await window.solana.signTransaction(transaction);
 
-                // Enviar transacción
+                // Enviar y confirmar
                 const signature = await connection.sendRawTransaction(signedTransaction.serialize());
-                await connection.confirmTransaction(signature);
+                await connection.confirmTransaction({ signature, lastValidBlockHeight: null, blockhash });
 
-                status.textContent = `¡Token quemado! Firma: ${signature}. SOL reclamado: ${data.solanaReclaimed}`;
+                status.textContent = `¡Tokens quemados! Firma: ${signature}`;
             } catch (err) {
                 error.textContent = 'Error: ' + err.message;
+                console.error(err);
             }
         };
     </script>
